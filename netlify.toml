@@ -1,9 +1,10 @@
 [build]
+  command = "pip install yt-dlp"
+  publish = "."
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["node_modules/yt-dlp-wrap/**"]
 
 [[redirects]]
   from = "/api/info"
