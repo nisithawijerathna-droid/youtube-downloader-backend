@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeDrop — YouTube Downloader</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #222222;
+      --red: #ff2b2b;
+      --red-glow: rgba(255, 43, 43, 0.15);
+      --text: #f0f0f0;
+      --muted: #666;
+      --white: #fff;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 40px;
+      overflow-x: hidden;
+    }
+
+    /* Background grain */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Logo */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 48px;
+      justify-content: center;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--red);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 24px var(--red-glow);
+    }
+
+    .logo-icon svg { width: 22px; height: 22px; fill: white; }
+
+    .logo-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 32px;
+      letter-spacing: 2px;
+      color: var(--white);
+    }
+
+    .logo-text span { color: var(--red); }
+
+    /* Input card */
+    .input-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .url-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .url-input::placeholder { color: var(--muted); }
+    .url-input:focus {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px var(--red-glow);
+    }
+
+    .fetch-btn {
+      background: var(--red);
+      border: none;
+      border-radius: 10px;
+      padding: 14px 24px;
+      color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(255,43,43,0.3);
+    }
+
+    .fetch-btn:hover { opacity: 0.9; box-shadow: 0 6px 24px rgba(255,43,43,0.4); }
+    .fetch-btn:active { transform: scale(0.97); }
+    .fetch-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Error */
+    .error-box {
+      background: rgba(255,43,43,0.08);
+      border: 1px solid rgba(255,43,43,0.25);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: #ff6b6b;
+      font-size: 13px;
+      margin-top: 14px;
+      display: none;
+    }
+
+    /* Result card */
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      animation: slideUp 0.3s ease;
+      display: none;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Thumbnail */
+    .thumb-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      overflow: hidden;
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .thumb-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%);
+    }
+
+    .thumb-badge {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--white);
+      backdrop-filter: blur(6px);
+    }
+
+    /* Video meta */
+    .video-meta {
+      padding: 20px 24px 0;
+    }
+
+    .video-title {
+      font-weight: 600;
+      font-size: 16px;
+      line-height: 1.4;
+      color: var(--white);
+      margin-bottom: 6px;
+    }
+
+    .video-uploader {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Format picker */
+    .format-section {
+      padding: 20px 24px 24px;
+    }
+
+    .format-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .format-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .format-chip {
+      position: relative;
+    }
+
+    .format-chip input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      width: 0; height: 0;
+    }
+
+    .format-chip label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .format-chip label .chip-icon { font-size: 14px; }
+
+    .format-chip input:checked + label {
+      background: var(--red-glow);
+      border-color: var(--red);
+      color: var(--white);
+    }
+
+    .format-chip label:hover {
+      border-color: #444;
+      color: var(--text);
+    }
+
+    /* Download button */
+    .download-btn {
+      width: 100%;
+      background: var(--red);
+      border: none;
+      border-radius: 10px;
+      padding: 16px;
+      color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+      box-shadow: 0 4px 20px rgba(255,43,43,0.3);
+    }
+
+    .download-btn:hover { opacity: 0.9; box-shadow: 0 6px 28px rgba(255,43,43,0.45); }
+    .download-btn:active { transform: scale(0.98); }
+    .download-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Progress */
+    .progress-wrap {
+      margin-top: 14px;
+      display: none;
+    }
+
+    .progress-bar-bg {
+      height: 4px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--red);
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.3s;
+      animation: pulse-bar 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-bar {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 12px;
+      color: #333;
+    }
+
+    /* Loading spinner on fetch */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Logo -->
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </div>
+    <div class="logo-text">TUBE<span>DROP</span></div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="input-card">
+    <span class="input-label">YouTube URL</span>
+    <div class="input-row">
+      <input
+        type="text"
+        class="url-input"
+        id="urlInput"
+        placeholder="https://youtube.com/watch?v=..."
+        onkeydown="if(event.key==='Enter') fetchInfo()"
+      >
+      <button class="fetch-btn" id="fetchBtn" onclick="fetchInfo()">Fetch</button>
+    </div>
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <!-- Result Card -->
+  <div class="result-card" id="resultCard">
+
+    <div class="thumb-wrap">
+      <img id="thumbnail" src="" alt="Thumbnail">
+      <div class="thumb-overlay"></div>
+      <span class="thumb-badge" id="duration"></span>
+    </div>
+
+    <div class="video-meta">
+      <div class="video-title" id="videoTitle"></div>
+      <div class="video-uploader" id="videoUploader"></div>
+    </div>
+
+    <div class="format-section">
+      <span class="format-label">Select Format</span>
+      <div class="format-grid" id="formatGrid"></div>
+
+      <button class="download-btn" id="downloadBtn" onclick="startDownload()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download
+      </button>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text" id="progressText">Preparing download...</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">For personal use only &bull; Respect copyright laws</div>
+
+</div>
+
+<script>
+  // ── CONFIG: point this to your deployed Netlify backend URL ──
+  const API_BASE = "https://YOUR-NETLIFY-SITE.netlify.app";
+  // ─────────────────────────────────────────────────────────────
+
+  let currentUrl = "";
+
+  const formatDefs = [
+    { id: "best_mp4", label: "Best Quality",  icon: "🎬" },
+    { id: "1080p",    label: "1080p",          icon: "🖥️" },
+    { id: "720p",     label: "720p",           icon: "📺" },
+    { id: "480p",     label: "480p",           icon: "📱" },
+    { id: "audio_mp3",label: "MP3 Audio",      icon: "🎵" },
+  ];
+
+  function showError(msg) {
+    const box = document.getElementById("errorBox");
+    box.textContent = "⚠️ " + msg;
+    box.style.display = "block";
+  }
+
+  function hideError() {
+    document.getElementById("errorBox").style.display = "none";
+  }
+
+  async function fetchInfo() {
+    const url = document.getElementById("urlInput").value.trim();
+    if (!url) { showError("Please paste a YouTube URL."); return; }
+
+    hideError();
+    currentUrl = url;
+
+    const btn = document.getElementById("fetchBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    document.getElementById("resultCard").style.display = "none";
+
+    try {
+      const res = await fetch(`${API_BASE}/api/info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch info");
+
+      document.getElementById("thumbnail").src = data.thumbnail;
+      document.getElementById("videoTitle").textContent = data.title;
+      document.getElementById("videoUploader").textContent = data.uploader ? "by " + data.uploader : "";
+      document.getElementById("duration").textContent = data.duration || "";
+
+      // Build format chips
+      const grid = document.getElementById("formatGrid");
+      grid.innerHTML = "";
+      (data.formats || formatDefs).forEach((f, i) => {
+        const def = formatDefs.find(d => d.id === f.id) || {};
+        grid.innerHTML += `
+          <div class="format-chip">
+            <input type="radio" name="fmt" id="fmt_${f.id}" value="${f.id}" ${i===0?"checked":""}>
+            <label for="fmt_${f.id}">
+              <span class="chip-icon">${def.icon || "📁"}</span>
+              ${f.label || def.label}
+            </label>
+          </div>
+        `;
+      });
+
+      document.getElementById("resultCard").style.display = "block";
+      document.getElementById("progressWrap").style.display = "none";
+
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = "Fetch";
+    }
+  }
+
+  async function startDownload() {
+    const fmt = document.querySelector('input[name="fmt"]:checked');
+    if (!fmt) return;
+
+    const btn = document.getElementById("downloadBtn");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressFill = document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Processing...`;
+    progressWrap.style.display = "block";
+    progressFill.style.width = "30%";
+    progressText.textContent = "Fetching video from YouTube...";
+
+    try {
+      progressFill.style.width = "60%";
+      progressText.textContent = "Processing & converting...";
+
+      const res = await fetch(`${API_BASE}/api/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: currentUrl, format: fmt.value }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Download failed");
+      }
+
+      progressFill.style.width = "90%";
+      progressText.textContent = "Almost done...";
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const fnMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = fnMatch ? fnMatch[1] : "video.mp4";
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+
+      progressFill.style.width = "100%";
+      progressText.textContent = "✅ Download started!";
+
+      setTimeout(() => { progressWrap.style.display = "none"; }, 3000);
+
+    } catch (err) {
+      progressText.textContent = "❌ " + err.message;
+      progressFill.style.background = "#ff4444";
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download
+      `;
+    }
+  }
+</script>
+
+</body>
+</html>

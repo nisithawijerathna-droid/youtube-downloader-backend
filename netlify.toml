@@ -1,0 +1,22 @@
+[build]
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["node_modules/yt-dlp-wrap/**"]
+
+[[redirects]]
+  from = "/api/info"
+  to = "/.netlify/functions/info"
+  status = 200
+
+[[redirects]]
+  from = "/api/download"
+  to = "/.netlify/functions/download"
+  status = 200
+
+[functions."download"]
+  timeout = 120
+
+[functions."info"]
+  timeout = 30
